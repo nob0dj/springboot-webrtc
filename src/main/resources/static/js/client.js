@@ -9,8 +9,8 @@ var incomingMessage = document.getElementById("incomingMessage");
 var localVideo = document.querySelector('#localVideo');
 var remoteVideo = document.querySelector('#remoteVideo');
 
-conn.onopen = function() {
-    console.log("Connected to the signaling server");
+conn.onopen = function(e) {
+    console.log("Connected to the signaling server : ", e);
     initialize();
 };
 
@@ -60,28 +60,6 @@ function initialize() {
             send(candidate);
         }
     };
-
-    // creating data channel
-    dataChannel = peerConnection.createDataChannel("dataChannel", {
-        reliable : true
-    });
-
-    dataChannel.onerror = function(error) {
-        console.log("Error occured on datachannel:", error);
-    };
-
-    // when we receive a message from the other peer, printing it on the console
-    dataChannel.onmessage = function(event) {
-        console.log("message:", event.data);
-        const {data} = event;
-        const p = document.createElement("p");
-        p.append(data);
-        incomingMessage.append(p);
-    };
-    
-    dataChannel.onclose = function() {
-        console.log("data channel is closed");
-    };
   	
   	/**
   	 * datachannel에서 message를 받기위해서
@@ -93,8 +71,13 @@ function initialize() {
   	peerConnection.ondatachannel = function (event) {
 		console.log("ondatachannel = ", event);
         dataChannel = event.channel;
+        onDataChannelCreated(dataChannel);
   	};
   	
+  	
+  	// creating data channel
+    dataChannel = peerConnection.createDataChannel("dataChannel");
+    onDataChannelCreated(dataChannel);
   	
   	
 	localVideo.addEventListener('click', e => {
@@ -138,6 +121,25 @@ function createOffer() {
     }, function(error) {
         alert("Error creating an offer");
     });
+}
+
+function onDataChannelCreated(dataChannel){
+	dataChannel.onerror = function(error) {
+        console.log("Error occured on datachannel:", error);
+    };
+
+    // when we receive a message from the other peer, printing it on the console
+    dataChannel.onmessage = function(event) {
+        console.log("message:", event.data);
+        const {data} = event;
+        const p = document.createElement("p");
+        p.append(data);
+        incomingMessage.append(p);
+    };
+    
+    dataChannel.onclose = function() {
+        console.log("data channel is closed");
+    };
 }
 
 function handleOffer(offer) {
