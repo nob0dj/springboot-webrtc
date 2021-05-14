@@ -1,0 +1,10 @@
+server:
+  port: 9090
+  ssl:
+    enabled: true
+    key-alias: shqkelkeystore
+    key-store: shqkelkeystore.pkcs12
+    key-store-password: 'shqkel'
+    key-password: 'shqkel'
+    trust-store: shqkel_trust.pkcs12
+    trust-store-password: 'shqkel' 
