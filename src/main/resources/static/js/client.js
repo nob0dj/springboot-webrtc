@@ -8,6 +8,9 @@ var incomingMessage = document.getElementById("incomingMessage");
 
 var localVideo = document.querySelector('#localVideo');
 var remoteVideo = document.querySelector('#remoteVideo');
+var localStream;
+var remoteStream;
+
 
 conn.onopen = function(e) {
     console.log("Connected to the signaling server : ", e);
@@ -48,19 +51,47 @@ function initialize() {
 	 * TURN (Traversal Using Relays around NAT) servers
 	 * other configurations 
 	 */ 
-    var configuration = null;
-
+    var configuration = {
+	  'iceServers': [
+	    {
+	      'urls': 'stun:stun.l.google.com:19302'
+	    },
+	    {
+	      urls: "turn:numb.viagenie.ca",
+	      credential: "muazkh",
+	      username: "webrtc@live.com"
+	    }
+	  ]
+	};
     peerConnection = new RTCPeerConnection(configuration);
 
     // Setup ice handling
     peerConnection.onicecandidate = function(event) {
         const {candidate} = event; 
         console.log("candidate = ", candidate);
+        
         if (candidate) {
-            send(candidate);
+			const {candidate: _candidate, sdpMLineIndex, sdpMid} = candidate;
+            send({
+				type: "candidate",
+				candidate: candidate.candidate,
+				candidate: _candidate,
+		      	sdpMLineIndex,
+		      	sdpMid
+			});
         }
     };
-  	
+    
+    peerConnection.onaddstream = function(event){
+		console.log("onaddstream = ", event);
+		remoteStream = event.stream;
+		remoteVideo.srcObject = remoteStream;
+	}
+    peerConnection.onremovestream = function(event){
+		console.log('onremovestrem : ', event);
+	}
+	
+
   	/**
   	 * datachannel에서 message를 받기위해서
   	 * peerConnection객체의 datachannel이벤트핸들러를 작성해야 한다.
@@ -74,12 +105,14 @@ function initialize() {
         onDataChannelCreated(dataChannel);
   	};
   	
+  	//localStream
+  	initLocalStream();
   	
-  	// creating data channel
-    dataChannel = peerConnection.createDataChannel("dataChannel");
-    onDataChannelCreated(dataChannel);
-  	
-  	
+
+}
+
+function initLocalStream(){
+	
 	localVideo.addEventListener('click', e => {
 	  mute(localVideo);
 	});
@@ -105,10 +138,15 @@ function initialize() {
 		  console.log('Adding local stream.');
 		  localStream = stream;
 		  localVideo.srcObject = stream;
+		  
+		  // stream 추가
+		  peerConnection.addStream(localStream);
 		})
 		.catch(function(e) {
 		  alert('getUserMedia() error: ' + e.name);
 		});
+	
+	
 
 }
 
@@ -163,7 +201,7 @@ function handleOffer(offer) {
 * candidate객체를 candidate pool에 추가
 */
 function handleCandidate(candidate) {
-	//console.log("handleCandidate = ", candidate);
+	console.log("handleCandidate = ", candidate);
     peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
 };
 
