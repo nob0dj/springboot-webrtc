@@ -57,7 +57,8 @@ public class SocketHandler extends TextWebSocketHandler {
 		Map<String, Object> payload = new Gson().fromJson(_payload, HashMap.class);
 		return String.valueOf(payload.get("type"));
 	}
-	private void sendMessage(WebSocketSession session, String type) throws Exception{
+	
+	private synchronized void sendMessage(WebSocketSession session, String type) throws Exception{
 		Map<String, Object> payload = new HashMap<>();
 		payload.put("type", type);
         payload.put("numOfClients", sessions.size());

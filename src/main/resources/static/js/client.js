@@ -12,7 +12,7 @@ var localStream;
 var remoteStream;
 
 var isInitiator = false;
-var isStarted = false;
+var isStarted = false; // initialize호출후 true로 변경
 
 
 conn.onopen = function(e) {
@@ -23,24 +23,21 @@ conn.onopen = function(e) {
  * MessageEvent 객체가 인자로 전달된다.
  */
 conn.onmessage = function({data}) {
+	data = JSON.parse(data);
     console.log("Got message : ", data);
-    const _data = JSON.parse(data);
-    const {type} = _data;
+    const {type, numOfClients} = data;
     switch (type) {
 	case "create or join": 
-		const {numOfClients} = _data;
 		if(numOfClients == 1) {
 			isInitiator = true; 
 			console.log("isInitiator : ", isInitiator);
 			initialize();	
 		}
 		else if (numOfClients == 2){
-			if(!isStarted){
+			if(!isStarted && !isInitiator){
 				console.log("isInitiator : ", isInitiator);
 				initialize();
 			}
-			if(isInitiator)
-				setTimeout(() => createOffer(), 2500);
 		}
 		else {
 			alert("참여인원이 가득 찼습니다.");
@@ -49,15 +46,18 @@ conn.onmessage = function({data}) {
 	case "bye": 
 		reset();
 		break;		
+	case "joined": 
+		createOffer();  // initiator이 경우만 "joined" message를 받는다. offer생성/전송
+		break;		
     case "offer":
-        handleOffer(_data); // for 2nd peer
+        handleOffer(data); // for 2nd peer
         break;
     case "answer":
-        handleAnswer(_data); // for initial peer
+        handleAnswer(data); // for initial peer
         break;
     // when a remote peer sends an ice candidate to us
     case "candidate":
-        handleCandidate(_data);
+        handleCandidate(data);
         break;
     default:
         break;
@@ -69,13 +69,16 @@ conn.onmessage = function({data}) {
  * https://stackoverflow.com/questions/25394151/how-can-i-reset-the-webrtc-state-in-chrome-node-webkit-without-refreshing-the-p
  */
 function reset(){
-	console.log("------ reset -------")
+	console.log("<<<<< reset >>>>>")
 	if(isInitiator){
-		//initialize();
-		peerConnection.setRemoteDescription({type: "rollback"});
+		/**
+		 * Uncaught (in promise) DOMException: Failed to execute 'setRemoteDescription' on 'RTCPeerConnection': Called in wrong signalingState: stable
+		 * 아래 코드를 작성하지 않아도 2nd peer join이벤트가 발생하면 이전 정보는 overwrite 된다. 
+		 */
+		//peerConnection.setRemoteDescription({type: "rollback"}); // remote rtcPeerConnection정보를 초기화 한다.
 	}
 	else {
-		location.reload();
+		setTimeout(() => location.reload(), 100); // initiator가 아닌 경우 페이지 새로고침을 통해 initiator가 된다.
 	}
 	
 }
@@ -85,7 +88,7 @@ function send(message) {
     conn.send(JSON.stringify(message));
 }
 
-function initialize() {
+async function initialize() {
 	/**
 	 * STUN (Session Traversal Utilities for NAT) servers
 	 * TURN (Traversal Using Relays around NAT) servers
@@ -104,7 +107,8 @@ function initialize() {
 	  ]
 	};
     peerConnection = new RTCPeerConnection(configuration);
-
+    console.log("peerConnection생성 : ", peerConnection);
+    
     // Setup ice handling
     peerConnection.onicecandidate = function(event) {
         const {candidate: obj} = event; 
@@ -131,8 +135,11 @@ function initialize() {
 		console.log('onremovestrem : ', event);
 	}
 	
-	dataChannel = peerConnection.createDataChannel("dataChannel");
-    onDataChannelCreated(dataChannel);
+    if(isInitiator){    	
+    	dataChannel = await peerConnection.createDataChannel("dataChannel");
+    	console.log("createDateaChannel : ", dataChannel);
+    	onDataChannelCreated(dataChannel);
+    }
 	
   	/**
   	 * datachannel에서 message를 받기위해서
@@ -148,14 +155,18 @@ function initialize() {
   	};
   	
   	//localStream
-  	initLocalStream();
+  	await initLocalStream();
   	
   	isStarted = true;
   	
-  	console.log("-----------initialize end------------------")
+  	console.log("<<<<< initialize end >>>>>");
+  	send({
+		type: isInitiator ? "created" : "joined"
+	});
 }
 
-function initLocalStream(){
+
+async function initLocalStream(){
 	
 	localVideo.addEventListener('click', e => {
 	  mute(localVideo);
@@ -175,7 +186,7 @@ function initLocalStream(){
 	    video: true,
 	    audio : true
 	};
-	navigator
+	await navigator
 		.mediaDevices
 		.getUserMedia(constraints)
 		.then(function(stream) {
@@ -189,14 +200,13 @@ function initLocalStream(){
 		.catch(function(e) {
 		  alert('getUserMedia() error: ' + e.name);
 		});
-	
-	
 
+	console.log("<<<<< initLocalStream end >>>>>");
 }
 
 function createOffer() {
     peerConnection.createOffer(function(offer) {
-        console.log("offer = ", offer);
+        console.log("createOffer = ", offer);
         send(offer);
         // initial peer의 local sdp 설정
         peerConnection.setLocalDescription(offer);
