@@ -8,3 +8,6 @@ server:
     key-password: 'shqkel'
     trust-store: shqkel_trust.pkcs12
     trust-store-password: 'shqkel' 
+
+
+logging:  level:    '[com.kh.spring.SocketHandler]': debug

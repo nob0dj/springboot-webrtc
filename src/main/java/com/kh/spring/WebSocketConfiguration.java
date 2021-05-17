@@ -15,7 +15,10 @@ public class WebSocketConfiguration implements WebSocketConfigurer {
 	
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(sockethandler, "/socket")
-            .setAllowedOrigins("*");
+        registry
+        	.addHandler(sockethandler, "/socket")
+//            .setAllowedOrigins("*")
+            .withSockJS(); // enables sockjs fallback
+        
     }
 }

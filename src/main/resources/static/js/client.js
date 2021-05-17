@@ -1,5 +1,6 @@
 //connecting to our signaling server 
-var conn = new WebSocket(`wss://${location.host}/socket`);
+//var conn = new WebSocket(`wss://${location.host}/socket`);
+var conn = new SockJS(`https://${location.host}/socket`); // sock.js
 
 var peerConnection;
 var dataChannel;
@@ -14,18 +15,20 @@ var remoteStream;
 var isInitiator = false;
 var isStarted = false; // initialize호출후 true로 변경
 
-
 conn.onopen = function(e) {
     console.log("Connected to the signaling server : ", e);
 };
 
-/**
+/**r
  * MessageEvent 객체가 인자로 전달된다.
  */
 conn.onmessage = function({data}) {
 	data = JSON.parse(data);
     console.log("Got message : ", data);
     const {type, numOfClients} = data;
+	
+	if(type != 'candidate') alert("message.type = " + type);
+	
     switch (type) {
 	case "create or join": 
 		if(numOfClients == 1) {
@@ -39,10 +42,11 @@ conn.onmessage = function({data}) {
 				initialize();
 			}
 		}
-		else {
-			alert("참여인원이 가득 찼습니다.");
-		}
-		break;		
+		break;
+	case "full":
+		alert("참여인원이 가득 찼습니다.");
+		break;
+			
 	case "bye": 
 		reset();
 		break;		
@@ -62,6 +66,10 @@ conn.onmessage = function({data}) {
     default:
         break;
     }
+};
+
+window.onbeforeunload = function() {
+  //send({type: "bye"});
 };
 
 /**
@@ -106,7 +114,8 @@ async function initialize() {
 	    }
 	  ]
 	};
-    peerConnection = new RTCPeerConnection(configuration);
+    peerConnection = new RTCPeerConnection();
+	peerConnection.setConfiguration(configuration);
     console.log("peerConnection생성 : ", peerConnection);
     
     // Setup ice handling
@@ -129,6 +138,13 @@ async function initialize() {
 		console.log("onaddstream = ", event);
 		remoteStream = event.stream;
 		remoteVideo.srcObject = remoteStream;
+	}
+
+    peerConnection.ontrack = function(event){
+		alert("ontrack = " + JSON.stringify(event));
+		console.log("ontrack = ", event);
+		//remoteStream = event.streams[0];
+		remoteVideo.srcObject = event.streams[0];
 	}
 	
     peerConnection.onremovestream = function(event){
@@ -186,16 +202,26 @@ async function initLocalStream(){
 	    video: true,
 	    audio : true
 	};
-	await navigator
+	
+	await 
+	navigator
 		.mediaDevices
 		.getUserMedia(constraints)
 		.then(function(stream) {
-		  console.log('Adding local stream.');
 		  localStream = stream;
 		  localVideo.srcObject = stream;
 		  
-		  // stream 추가
-		  peerConnection.addStream(localStream);
+		  console.log('Adding local stream.');		  
+		  if(peerConnection.addStream){
+			// stream 추가
+		  	peerConnection.addStream(localStream); // add stream deprecated
+		  }
+		  else{
+		    localStream.getTracks().forEach(track => {
+			  peerConnection.addTrack(track, stream);
+		    });			
+		  }
+		  alert('Adding local stream complete!');
 		})
 		.catch(function(e) {
 		  alert('getUserMedia() error: ' + e.name);
@@ -238,12 +264,15 @@ function onDataChannelCreated(dataChannel){
     };
 }
 
-function handleOffer(offer) {
+async function handleOffer(offer) {
+	alert("handleOffer start");
 	// 2nd peer의 상대 sdp 설정
     peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
 
     // create and send an answer to an offer
-    peerConnection.createAnswer(function(answer) {
+    await
+	peerConnection.createAnswer(function(answer) {
+		alert("answer = " + answer);
 		console.log("answer = ", answer);
         //2nd peer의 local sdp 설정
         peerConnection.setLocalDescription(answer);
@@ -252,7 +281,7 @@ function handleOffer(offer) {
     }, function(error) {
         alert("Error creating an answer");
     });
-
+	alert("handleOffer end");
 };
 
 /**
